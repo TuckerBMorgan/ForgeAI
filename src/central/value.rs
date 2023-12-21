@@ -68,6 +68,17 @@ impl Value {
         let result = self.data().map(|x|x.log(10.0));
         return Value::new_from_op(result, Operation::Log10(self.value));
     }
+
+    // Only getting this to work for a the case 1, N matrices, the bigger case is ... just harder
+    pub fn view(&self, index: usize) -> Value {
+        let shape = self.data().shape();
+        if shape.0 != 1 {
+            panic!("First dimenion does not equal 1, does not work for that at the moment");
+        }
+        let mut mask = DMatrix::from_element(shape.0, shape.1, 0.0f32);
+        *mask.get_mut((0, index)).unwrap() = 1.0;    
+        return Value::new_from_op(mask, Operation::View(self.value));
+    }
 }
 
 impl Add for Value {
@@ -126,9 +137,7 @@ impl Div for Value {
     type Output = Self;
     fn div(self, rhs: Value) -> Self::Output {
         let intermediate = rhs.pow(DMatrix::from_element(1, 1, -1.0));
-
-
-        return Value::new_from_op(self.data() * intermediate.data(), Operation::Multiplication(self.value, intermediate.value));
+        return Value::new_from_op(self.data().component_mul(&intermediate.data()), Operation::Multiplication(self.value, intermediate.value));
     }
 }
  

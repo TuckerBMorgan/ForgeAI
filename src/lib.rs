@@ -277,5 +277,79 @@ pub mod tests {
         }
     }
 
+    use core::f32;
+    use std::fs::read_to_string;
+    use std::collections::{HashMap, HashSet};
+    use std::ops::Mul;
+
+    fn read_lines(filename: &str) -> Vec<String> {
+        let mut result = Vec::new();
+
+        for line in read_to_string(filename).unwrap().lines() {
+            result.push(line.to_string())
+        }
+
+        result
+    }
+
+    #[test]
+    fn bigram_test() {
+        let names = read_lines("./data/bigram/names.txt");
+        let mut chars: HashSet<char> = names.iter()
+        .flat_map(|word| word.chars())
+        .collect();
+        
+        let mut chars_vec: Vec<char> = chars.into_iter().collect();
+        chars_vec.sort_unstable();
+
+        let mut stoi: HashMap<char, usize> = HashMap::new();
+        for (i, &c) in chars_vec.iter().enumerate() {
+            stoi.insert(c, i + 1);
+        }
+        stoi.insert('.', 0);
+
+        let itos: HashMap<usize, char> = stoi.iter()
+            .map(|(&c, &i)| (i, c))
+            .collect();
+
+        let mut inputs = vec![];
+        let mut outputs = vec![];
+
+        for name in names {
+            let fixed = String::from(".") + &name + ".";
+            let chars: Vec<char> = fixed.chars().collect();
+            for i in 0..chars.len() - 1 {
+                let pair = (chars[i], chars[i + 1]);
+                inputs.push(stoi[&pair.0]);
+                outputs.push(stoi[&pair.1]);
+            }
+        }
+        let mut one_hot_inputs = vec![];
+        let mut one_hot_outputs = vec![];
+
+        for (input, output) in inputs.iter().zip(outputs.iter()) {
+            let mut one_hot : DMatrix<f32> = DMatrix::zeros(1, 27);
+            one_hot[*input] = 1.0;
+            one_hot_inputs.push(one_hot);
+            let mut one_hot : DMatrix::<f32> = DMatrix::zeros(1, 27);
+            one_hot[*output] = 1.0;
+            one_hot_outputs.push(one_hot);
+        }
+        let mut rng = rand::thread_rng();
+        let weights = Value::new(DMatrix::from_fn(27, 27, |_x, _y|{rng.gen_range(-1.0..1.0)}));
+        let one_out_as_value = Value::new(one_hot_inputs[0].clone());
+        let logits = one_out_as_value.matrix_mul(weights);
+        let counts = logits.exp();
+        let counts_sum = counts.data().column_sum();
+        let middle_step = DMatrix::from_element(1, 27, counts_sum[0]);
+        println!("{:?}", counts.data().shape());
+        println!("{:?}", middle_step.shape());
+        let probs = counts / Value::new(middle_step);
+
+        let view = probs.view(outputs[0]);
+        let log = view.log();
+        let loss = -log;
+        loss.backward();
+    }
 
 }

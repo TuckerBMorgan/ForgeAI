@@ -48,6 +48,9 @@ impl InternalValue {
             },
             Operation::Log10(a) => {
                 return vec![a];
+            },
+            Operation::View(a) => {
+                return vec![a];
             }
         }
     }

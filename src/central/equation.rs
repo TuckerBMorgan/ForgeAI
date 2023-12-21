@@ -11,7 +11,8 @@ pub enum Operation {
     Exp(ValueKey),
     Pow(ValueKey, ValueKey),
     MatrixMultiplication(ValueKey, ValueKey),
-    Log10(ValueKey)
+    Log10(ValueKey),
+    View(ValueKey)
 }
 
 unsafe impl Send for Operation {}
@@ -94,7 +95,10 @@ impl Equation {
             Operation::Log10(base) => {
                 let grad = self.values.get(&base).unwrap().data.map(|x| 1.0 / x);
                 self.values.get_mut(&base).unwrap().grad += grad;
-            }
+            },
+            Operation::View(value) => {
+                //let element_wise = 
+            },
 
         }
     }
