@@ -1,5 +1,6 @@
 mod central;
 
+pub use central::Value;
 
 #[cfg(test)]
 pub mod tests {
@@ -75,12 +76,12 @@ pub mod tests {
 
     #[test]
     fn basic_pow() {
-        let a = Value::new(ArrayD::from_elem(vec![1, 1], 2.0));
+        let a = Value::new(ArrayD::from_elem(vec![1], 2.0));
         
-        let b = a.pow(ArrayD::from_elem(vec![1, 1], 3.0));
+        let b = a.pow(ArrayD::from_elem(vec![1], 3.0));
         b.backward();
-        assert!(b.data()[[0, 0]] == 8.0);
-        assert!(a.grad()[[0, 0]] == 12.0);
+        assert!(b.data()[[0]] == 8.0);
+        assert!(a.grad()[[0]] == 12.0);
          
     }
 
@@ -108,17 +109,31 @@ pub mod tests {
 
     #[test]
     fn basic_div_test() {
-        let a = Value::new(ArrayD::from_elem(vec![1, 1], 10.0));
-        let b = Value::new(ArrayD::from_elem(vec![1, 1], 5.0));
+        let a = Value::new(ArrayD::from_elem(vec![1], 10.0));
+        let b = Value::new(ArrayD::from_elem(vec![1], 5.0));
         let c = a / b;
         c.backward();
-        assert!(c.data()[[0, 0]] == 2.0);
-        assert!(a.grad()[[0, 0]] == 0.2);
+        assert!(c.data()[[0]] == 2.0);
+        assert!(a.grad()[[0]] == 0.2);
 
         // b.grad comes out to roughly -0.39999 
         // we we look at the abs minus the expected value
         // and we just want to know that difference is small enough
-        assert!(approx_equal(b.grad()[[0, 0]], -0.4, 0.0001));
+        assert!(approx_equal(b.grad()[[0]], -0.4, 0.0001));
+    }
+
+    #[test] 
+    fn basic_view_test() {
+        let a = Value::new(ArrayD::ones(vec![20, 30]));
+        let b = Value::arange(10);
+        let c = Value::arange(15);
+        let view = a.view(b, c);
+        let d = Value::new(ArrayD::ones(vec![10]));
+        println!("{:?}", view.data().shape());
+        println!("{:?}", d.data().shape());
+        let e = view + d;
+        e.backward();
+
     }
 
     #[test]
@@ -182,12 +197,12 @@ pub mod tests {
             let mut rng = rand::thread_rng();
             let mut weights = vec![];
             for _ in 0..number_of_inputs {
-                weights.push(Value::new(ArrayD::from_elem(vec![1, 1], rng.gen_range(-1.0..1.0))));
+                weights.push(Value::new(ArrayD::from_elem(vec![1], rng.gen_range(-1.0..1.0))));
             }
 
             Neuron {
                 weights,
-                bias: Value::new(ArrayD::from_elem(vec![1, 1], rng.gen_range(-1.0..1.0)))    
+                bias: Value::new(ArrayD::from_elem(vec![1], rng.gen_range(-1.0..1.0)))    
             }
         }
 
@@ -248,7 +263,7 @@ pub mod tests {
         }
 
         pub fn call(&self, input: &Vec<f32>) -> Vec<Value>  {
-            let mut values : Vec<Value> = input.iter().map(|x|Value::new(ArrayD::from_elem(vec![1, 1], *x))).collect();
+            let mut values : Vec<Value> = input.iter().map(|x|Value::new(ArrayD::from_elem(vec![1], *x))).collect();
             
             for layer in self.layers.iter() {
                 values = layer.call(&values);
@@ -280,13 +295,12 @@ pub mod tests {
             }
     
             let collected = outputs.iter().zip(predicted_ouputs.iter());
-            let mut loss = Value::new(ArrayD::from_elem(vec![1, 1], 0.0));
+            let mut loss = Value::new(ArrayD::from_elem(vec![1], 0.0));
     
             for (a, b) in collected {
-                let predicted_as_value = Value::new(ArrayD::from_elem(vec![1, 1], *a));
-                // TOOD: Write a proper Value - Value function
+                let predicted_as_value = Value::new(ArrayD::from_elem(vec![1], *a));
                 let difference = b[0] + -predicted_as_value;
-                let power = difference.pow(ArrayD::from_elem(vec![1, 1], 2.0));
+                let power = difference.pow(ArrayD::from_elem(vec![1], 2.0));
                 loss = loss + power;
             }
             println!("{:?}", loss.data());
@@ -303,7 +317,6 @@ pub mod tests {
     use core::f32;
     use std::fs::read_to_string;
     use std::collections::{HashMap, HashSet};
-    use std::ops::Mul;
 
     fn read_lines(filename: &str) -> Vec<String> {
         let mut result = Vec::new();
@@ -365,28 +378,10 @@ pub mod tests {
 
         let probs = counts / counts_sum;
         let xs = Value::arange(inputs.len());
-        println!("{:?}", outputs.shape());
         let value = Value::new(outputs);
-        println!("sdsdsdsdsd");
         let views = probs.view(xs, value);
-        println!("sdsdsdsdsd");
         let logged = -views.log().mean();
-        println!("sdsdsdsdsd");
         logged.backward();
-        /* 
-        let mut selected_probs = Vec::new();
-        let indics = 0..output_indexes.len();
-        for (i, y) in output_indexes.iter().zip(indics.into_iter()) {
-            selected_probs.push(probs.data()[[*i, y]]);
-        }
-        let selected_probs_nd = Array::from_vec(selected_probs);
-        println!("{:?}", selected_probs_nd);
-        */
-        /*
-        let log = view.log(10.0);
-        let loss = -log;
-        //loss.backward();
-        */
     }
 
 }

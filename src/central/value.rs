@@ -89,16 +89,18 @@ impl Value {
                 let y_inputs = singleton.get_value(c);
 
                 let zipped_iter = x_inputs.iter().zip(y_inputs.iter());
-                let mut zeores = ArrayD::zeros(vec![x_inputs.len(), y_inputs.shape()[1]]);
+
+                let mut data_vec = vec![];
                 for (x, y) in zipped_iter {
-                    zeores[[*x as usize, *y as usize]] = source_data[[*x as usize, *y as usize]];
+                    data_vec.push(source_data[[*x as usize, *y as usize]]);
                 }
+                let zeores = ArrayD::from_shape_vec(vec![x_inputs.shape()[0]], data_vec).unwrap();              
                 return zeores;
             },
             _ => {
                 // Return a copy of the data in the array, exspensive
                 let singleton = crate::central::SINGLETON_INSTANCE.lock().unwrap();
-                return singleton.get_value(self.value);        
+                return singleton.get_value(self.value);
             }
         }
     }
@@ -115,8 +117,8 @@ impl Value {
     /// # Examples
     /// 
     /// ```
-    /// let a = Value::new(ArrayD::from_elem(vec![1, 1], 1.0));
-    /// let b = Value::new(ArrayD::from_elem(vec![1, 1], 2.0));
+    /// let a = Value::new(ArrayD::from_elem(vec![1], 1.0));
+    /// let b = Value::new(ArrayD::from_elem(vec![1], 2.0));
     /// let result = a + b;
     /// result.backward();
     /// assert!(result.grad()[[0, 0]] == 1.0);
@@ -135,7 +137,7 @@ impl Value {
 
     /// Returns a new node with values of the node with the tanh function called on them
     pub fn tanh(&self) -> Value {
-        let hold = Value::new(ArrayD::from_elem(vec![1, 1], 2.0));
+        let hold = Value::new(ArrayD::from_elem(vec![1], 2.0));
         let k = *self * hold;
         let e = k.exp();
         let o = (e - 1.0) / (e + 1.0);
@@ -148,7 +150,7 @@ impl Value {
     pub fn pow(&self, other: ArrayD<f32>) -> Value {
         let holding_value = Value::new(other.clone());
 
-        let power = other[[0, 0]];
+        let power = other[0];
         return Value::new_from_op(self.data().map(|x|x.powf(power)), Operation::Pow(self.value, holding_value.value));
     }
 
@@ -180,7 +182,7 @@ impl Value {
     /// so this works by taking it two 1d arrays, and then when .data() is called on it
     /// running through the pairs of values, and copying them into a new array, not perfect
     pub fn view(&self, xs: Value, ys: Value) -> Value {
-        return Value::new_from_op(ArrayD::from_elem(vec![1, 1], 0.0), Operation::View(self.value, xs.value, ys.value));
+        return Value::new_from_op(ArrayD::from_elem(vec![1], 0.0), Operation::View(self.value, xs.value, ys.value));
     }
 
 
@@ -197,7 +199,7 @@ impl Value {
     /// Returns the mean of the array behind the value
     pub fn mean(&self) -> Value {
         let result = self.data().mean().unwrap();
-        return Value::new_from_op(ArrayD::from_elem(vec![1, 1], result), Operation::Mean(self.value));
+        return Value::new_from_op(ArrayD::from_elem(vec![1], result), Operation::Mean(self.value));
     }
 }
 
@@ -220,7 +222,7 @@ impl Add<f32> for Value {
     type Output = Value;
 
     fn add(self, other: f32) -> Value {
-        let as_matrix = Value::new(ArrayD::from_elem(vec![1, 2], other));
+        let as_matrix = Value::new(ArrayD::from_elem(vec![1], other));
         return Value::new_from_op(self.data() + as_matrix.data(), Operation::Add(self.value, as_matrix.value));
     }
 }
@@ -229,7 +231,7 @@ impl Mul<f32> for Value {
     type Output = Self;
 
     fn mul(self, other: f32) -> Self::Output {
-        let holding_value = Value::new(ArrayD::from_elem(vec![1, 2], other));
+        let holding_value = Value::new(ArrayD::from_elem(vec![1], other));
         return Value::new_from_op(self.data() * other, Operation::Multiplication(self.value, holding_value.value));
     }
 }
@@ -238,7 +240,7 @@ impl Add<Value> for f32 {
     type Output = Value;
 
     fn add(self, other: Value) -> Value {
-        let holding_value = Value::new(ArrayD::from_elem(vec![1, 2], self));
+        let holding_value = Value::new(ArrayD::from_elem(vec![1], self));
         return Value::new_from_op(holding_value.data() + other.data(), Operation::Add(holding_value.value, other.value));
     }
 }
@@ -247,7 +249,7 @@ impl Mul<Value> for f32 {
     type Output = Value;
 
     fn mul(self, other: Value) -> Value {
-        let holding_value = Value::new(ArrayD::from_elem(vec![1, 1], self));
+        let holding_value = Value::new(ArrayD::from_elem(vec![1], self));
         return Value::new_from_op(holding_value.data() * other.data(), Operation::Multiplication(holding_value.value, other.value));
     }
 }
@@ -255,7 +257,7 @@ impl Mul<Value> for f32 {
 impl Div for Value {
     type Output = Self;
     fn div(self, rhs: Value) -> Self::Output {
-        let intermediate = rhs.pow(ArrayD::from_elem(vec![1, 1], -1.0));
+        let intermediate = rhs.pow(ArrayD::from_elem(vec![1], -1.0));
 
         return Value::new_from_op(self.data().mul(&intermediate.data()), Operation::Multiplication(self.value, intermediate.value));
     }
@@ -272,7 +274,7 @@ impl Neg for Value {
 impl Sub<f32> for Value {
     type Output = Self;
     fn sub(self, rhs: f32) -> Self::Output {
-        let holding_value = Value::new(ArrayD::from_elem(vec![1, 1], rhs));
+        let holding_value = Value::new(ArrayD::from_elem(vec![1], rhs));
         let intermeditate = -holding_value;
         return Value::new_from_op(self.data() + intermeditate.data(), Operation::Add(self.value, intermeditate.value));
     }
