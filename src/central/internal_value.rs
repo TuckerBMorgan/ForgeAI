@@ -1,9 +1,14 @@
 use crate::central::*;
-use ndarray::{ArrayD, Shape};
+use ndarray::ArrayD;
 
+/// The struct that represents a Node in our graph
 pub struct InternalValue {
+    /// What data is in this node
     pub data: ArrayD<f32>,
+    /// What the gradiante for this node is, starts at zero
+    /// is always the same shape as data
     pub grad: ArrayD<f32>,
+    /// What operation created this value, will be NOP for basic creation
     pub operation: Operation
 }
 
@@ -48,7 +53,10 @@ impl InternalValue {
             Operation::Log10(a) => {
                 return vec![a];
             },
-            Operation::View(a, b, c) => {
+            Operation::View(a, _b, _c) => {
+                // We ignore B and C, as they are just the arrays that hold the indices
+                // that make up the view, and as such we don't need to preform
+                // backprop on them
                 return vec![a];
             },
             Operation::Sum(a, _index) => {

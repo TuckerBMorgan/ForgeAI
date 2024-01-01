@@ -329,7 +329,7 @@ pub mod tests {
     #[test]
     fn bigram_test() {
         let names = read_lines("./data/bigram/names.txt");
-        let mut chars: HashSet<char> = names.iter()
+        let chars: HashSet<char> = names.iter()
         .flat_map(|word| word.chars())
         .collect();
         
@@ -342,7 +342,7 @@ pub mod tests {
         }
         stoi.insert('.', 0);
 
-        let itos: HashMap<usize, char> = stoi.iter()
+        let _itos: HashMap<usize, char> = stoi.iter()
             .map(|(&c, &i)| (i, c))
             .collect();
 
@@ -378,7 +378,9 @@ pub mod tests {
         let value = Value::new(outputs);
         let views = probs.view(xs, value);
         let logged = -views.log().mean();
+        println!("{:?}", logged.data());
         logged.backward();
+
     }
 
 }
