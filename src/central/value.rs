@@ -159,8 +159,11 @@ impl Value {
     /// * 'value' - The other value too be multiplied by
     pub fn matrix_mul(&self, value: Value) -> Value {
         // TODO: Make sure that the two matrices are able to multiplied with each other
-        let result = self.data().mul(value.data());
-        return Value::new_from_op(result, Operation::MatrixMultiplication(self.value, value.value));
+
+        let data_as_2d = self.data().into_dimensionality::<Ix2>().unwrap();
+        let other_as_2d = value.data().into_dimensionality::<Ix2>().unwrap();
+        let result_array = data_as_2d.dot(&other_as_2d);
+        return Value::new_from_op(result_array.into_dyn(), Operation::MatrixMultiplication(self.value, value.value));
     }
 
     /// Returns a new value that contains all of the values of this node passed to the natural log function

@@ -129,11 +129,9 @@ pub mod tests {
         let c = Value::arange(15);
         let view = a.view(b, c);
         let d = Value::new(ArrayD::ones(vec![10]));
-        println!("{:?}", view.data().shape());
-        println!("{:?}", d.data().shape());
         let e = view + d;
         e.backward();
-
+        assert!(approx_equal(a.grad()[[0, 0]], 1.0, 0.001));
     }
 
     #[test]
@@ -358,7 +356,6 @@ pub mod tests {
                 let pair = (chars[i], chars[i + 1]);
                 inputs.push(stoi[&pair.0]);
                 outputs[[i, stoi[&pair.1]]] = 1.0;
-//                outputs.push(stoi[&pair.1]);
             }
         }
 
@@ -369,7 +366,7 @@ pub mod tests {
         }
 
         let mut rng = rand::thread_rng();
-        let weights = Value::new(ArrayD::from_shape_fn(vec![inputs.len(), 27], |_x|{rng.gen_range(-1.0..1.0)}));
+        let weights = Value::new(ArrayD::from_shape_fn(vec![27, 27], |_x|{rng.gen_range(-1.0..1.0)}));
         let one_out_as_value = Value::new(start_as.clone());
 
         let logits = one_out_as_value.matrix_mul(weights);

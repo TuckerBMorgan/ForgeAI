@@ -122,10 +122,15 @@ impl Equation {
                 self.values.get_mut(&base).unwrap().grad = &self.values.get_mut(&base).unwrap().grad + grad_update;
             }
             Operation::MatrixMultiplication(left_hand, right_hand) => {
+                let out_data = out_data.into_dimensionality::<Ix2>().unwrap();
+                let other = self.values.get(&right_hand).unwrap().data.t().into_dimensionality::<Ix2>().unwrap();
                 self.values.get_mut(&left_hand).unwrap().grad =
-                    out_data.clone() * self.values.get(&right_hand).unwrap().data.t();
+                    out_data.clone().dot(&other).into_dyn();
+                let other = self.values.get(&left_hand).unwrap().data.t().into_dimensionality::<Ix2>().unwrap();
                 self.values.get_mut(&right_hand).unwrap().grad =
-                    out_data * self.values.get(&left_hand).unwrap().data.t();
+                    out_data.dot(&other).into_dyn();
+
+
             }
             Operation::Log10(base) => {
                 let grad = self.values.get(&base).unwrap().data.map(|x| 1.0 / x);
