@@ -9,7 +9,9 @@ pub struct InternalValue {
     /// is always the same shape as data
     pub grad: ArrayD<f32>,
     /// What operation created this value, will be NOP for basic creation
-    pub operation: Operation
+    pub operation: Operation,
+
+    pub requires_grad: bool
 }
 
 impl InternalValue {
@@ -17,13 +19,16 @@ impl InternalValue {
         InternalValue {
             data:data.clone(),
             grad: ArrayD::zeros(data.shape()),
-            operation
+            operation,
+            requires_grad: false
         }
     }
 
     #[allow(dead_code)]
     pub fn update_data(&mut self, learning_rate: f32) {
-        self.data = &self.data + (&self.grad * learning_rate);
+        if self.requires_grad == false {
+            self.data = &self.data + (&self.grad * learning_rate);
+        }
     }
 
     pub fn zero_grad(&mut self) {

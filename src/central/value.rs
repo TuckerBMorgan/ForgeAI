@@ -11,7 +11,7 @@ pub struct Value {
     /// What opertion created this value, it will be Operation::Nop for values created without an operation
     operation: Operation,
     /// A key for the InternalValue stored by the equation itself
-    value: ValueKey
+    pub value: ValueKey
 }
 
 impl Value {
@@ -23,7 +23,8 @@ impl Value {
     /// ```
     /// // This will create a value in the equation of 5 wide and 5 high, set all to one
     /// 
-    /// use forge_ai::prelude::*;
+    /// use forge_ai::Value;
+    /// use ndarray::ArrayD;
     /// let value = Value::new(ArrayD::ones(vec![5, 5]));
     /// ```
     pub fn new(data: ArrayD<f32>) -> Value {
@@ -45,18 +46,21 @@ impl Value {
     }
 
 
-    /// A function that returns a Value that holds an array of size [1, end]
-    /// filled with values between [0, end)
-    /// # Arguments
-    /// 
-    /// * 'end' - The end of the range, not included
-    /// 
-    /// # Examples
-    /// ```
-    /// // This will return an array with values between 0 and 10
-    /// let value = Value::arange(10);
-    /// assert!(value.data(0), 0.0);
-    /// ```
+    /**
+    A function that returns a Value that holds an array of size [1, end]
+    filled with values between [0, end)
+    # Arguments
+
+    * 'end' - The end of the range, not included
+
+    # Examples
+    ```
+    // This will return an array with values between 0 and 10
+    use forge_ai::Value;
+    let value = Value::arange(10);
+
+    ```
+    */
     pub fn arange(end: usize) -> Value {
         let data = ArrayD::from_shape_vec(vec![end], (0..end).collect()).unwrap().mapv(|x|f32::from(x as u8));
         let mut singleton = crate::central::SINGLETON_INSTANCE.lock().unwrap();
@@ -73,8 +77,9 @@ impl Value {
     /// # Examples
     /// ```
     /// // This will return an array with values between 0 and 10
+    /// use forge_ai::Value;
     /// let value = Value::arange(10);
-    /// assert!(value.data(0), 0.0);
+    /// 
     /// ```
     pub fn data(&self) -> ArrayD<f32> {
         match self.operation {
@@ -117,13 +122,15 @@ impl Value {
     /// # Examples
     /// 
     /// ```
+    /// use forge_ai::Value;
+    /// use ndarray::ArrayD;
     /// let a = Value::new(ArrayD::from_elem(vec![1], 1.0));
     /// let b = Value::new(ArrayD::from_elem(vec![1], 2.0));
     /// let result = a + b;
     /// result.backward();
-    /// assert!(result.grad()[[0, 0]] == 1.0);
-    /// assert!(a.grad()[[0, 0]] == 1.0);
-    /// assert!(b.grad()[[0, 0]] == 1.0);
+    /// assert!(result.grad()[[0]] == 1.0);
+    /// assert!(a.grad()[[0]] == 1.0);
+    /// assert!(b.grad()[[0]] == 1.0);
     /// ```
     pub fn backward(&self) {
         let mut singleton = crate::central::SINGLETON_INSTANCE.lock().unwrap();
@@ -203,6 +210,11 @@ impl Value {
     pub fn mean(&self) -> Value {
         let result = self.data().mean().unwrap();
         return Value::new_from_op(ArrayD::from_elem(vec![1], result), Operation::Mean(self.value));
+    }
+
+    pub fn set_requires_grad(&self, required_grad: bool) {
+        let mut singleton = crate::central::SINGLETON_INSTANCE.lock().unwrap();
+        singleton.set_requires_grad(self.value, required_grad);
     }
 }
 

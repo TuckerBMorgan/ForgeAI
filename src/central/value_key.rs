@@ -1,7 +1,7 @@
 
 
 
-#[derive(Hash, PartialEq, Eq, Copy, Clone)]
+#[derive(Hash, PartialEq, Eq, Copy, Clone, Debug)]
 pub struct ValueKey {
     key: usize
 }

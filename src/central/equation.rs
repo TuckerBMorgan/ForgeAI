@@ -4,7 +4,7 @@ use ndarray::prelude::*;
 use std::collections::{HashMap, HashSet};
 
 /// An enum used by the equation to know what backward propgation method to preform
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Operation {
     /// No operation, this will not pass any gradient 
     Nop, 
@@ -63,7 +63,7 @@ impl Equation {
     /// Needs to be called after backwards is called, elsewise the grad will be 0
     pub fn update_grad(&mut self) {
         for (_, value) in self.values.iter_mut() {
-            value.update_data(-0.01);
+            value.update_data(-0.05);
         }
     }
 
@@ -124,12 +124,13 @@ impl Equation {
             Operation::MatrixMultiplication(left_hand, right_hand) => {
                 let out_data = out_data.into_dimensionality::<Ix2>().unwrap();
                 let other = self.values.get(&right_hand).unwrap().data.t().into_dimensionality::<Ix2>().unwrap();
-                self.values.get_mut(&left_hand).unwrap().grad =
-                    out_data.clone().dot(&other).into_dyn();
-                let other = self.values.get(&left_hand).unwrap().data.t().into_dimensionality::<Ix2>().unwrap();
-                self.values.get_mut(&right_hand).unwrap().grad =
-                    out_data.dot(&other).into_dyn();
 
+                self.values.get_mut(&left_hand).unwrap().grad = &self.values.get(&left_hand).unwrap().grad + out_data.clone().dot(&other).into_dyn();
+
+                let other = self.values.get(&left_hand).unwrap().data.t().into_dimensionality::<Ix2>().unwrap();
+                let temp = &self.values.get(&right_hand).unwrap().grad + other.dot(&out_data).into_dyn();
+
+                self.values.get_mut(&right_hand).unwrap().grad = temp;
 
             }
             Operation::Log10(base) => {
@@ -208,5 +209,9 @@ impl Equation {
         while let Some(node) = stack.pop() {
             let _ = self.backward_for_value(node); // Assuming this calculates and returns the children of the node
         }
+    }
+
+    pub fn set_requires_grad(&mut self, value: ValueKey, requires_grad: bool) {
+        self.values.get_mut(&value).unwrap().requires_grad = requires_grad;
     }
 }

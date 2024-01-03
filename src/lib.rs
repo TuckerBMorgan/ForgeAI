@@ -20,8 +20,11 @@ pub mod tests {
         let a = Value::new(ArrayD::ones(vec![2,2]));
         let b = Value::new(ArrayD::ones(vec![2,2]));
         let c = a + b;
+        // Rust and Python elvaulate - and functions if a different order
+        // the () are needed
         let loss = -(c.log().mean());
         loss.backward();
+        // Values taken from a pytorch file
         assert!(approx_equal(a.grad()[[0, 0]], -0.125, 0.005));
     }
 
@@ -346,10 +349,14 @@ pub mod tests {
             .map(|(&c, &i)| (i, c))
             .collect();
 
-        let mut inputs = vec![];
-        let mut outputs = ArrayD::zeros(vec![names.len(), 27]);
+        let mut inputs: Vec<usize> = vec![];
+        let test_batch = 32;
+        let mut outputs = ArrayD::zeros(vec![test_batch, 27]);
 
-        for name in names.iter().take(1000) {
+
+        // I BUILT MY DATASET WRONG
+        // Less tired, and with more time on your hand, this will be easy to solve
+        for name in names.iter().take(test_batch) {
             let fixed = String::from(".") + &name + ".";
             let chars: Vec<char> = fixed.chars().collect();
             for i in 0..chars.len() - 1 {
@@ -359,27 +366,48 @@ pub mod tests {
             }
         }
 
-        let mut start_as = ArrayD::from_elem(vec![inputs.len(), 27], 0.0f32);
+        let mut start_as = ArrayD::from_elem(vec![test_batch, 27], 0.0f32);
 
         for (input, output) in inputs.iter().enumerate() {
+            if input == test_batch {
+                break;
+            }
             start_as[[input, *output]] = 1.0;
         }
 
         let mut rng = rand::thread_rng();
         let weights = Value::new(ArrayD::from_shape_fn(vec![27, 27], |_x|{rng.gen_range(-1.0..1.0)}));
+        weights.set_requires_grad(true);
         let one_out_as_value = Value::new(start_as.clone());
+        println!("{:?}", outputs.shape());
+        println!("{:?}", outputs);
+        panic!("ljsljks");
+        for _ in 0..50 {
+            {
+                let mut singleton = crate::central::SINGLETON_INSTANCE.lock().unwrap();
+                singleton.zero_grad();
+            }
+            let logits = one_out_as_value.matrix_mul(weights);
+            let counts = logits.exp();
 
-        let logits = one_out_as_value.matrix_mul(weights);
-        let counts = logits.exp();
-        let counts_sum = counts.sum(0);
+            //TODO HMM, pytorch has this 1
+            // I have this as 0... that is wrong
+            let counts_sum = counts.sum(0);
+    
+            let probs = counts / counts_sum;
 
-        let probs = counts / counts_sum;
-        let xs = Value::arange(inputs.len());
-        let value = Value::new(outputs);
-        let views = probs.view(xs, value);
-        let logged = -views.log().mean();
-        println!("{:?}", logged.data());
-        logged.backward();
+            let xs = Value::arange(test_batch);
+
+            let value = Value::new(outputs.clone());
+            let views = probs.view(xs, value);
+            let logged = -(views.log().mean());
+            println!("{:?}", logged.data());
+            logged.backward();    
+            {
+                let mut singleton = crate::central::SINGLETON_INSTANCE.lock().unwrap();
+                singleton.update_grad();
+            }
+        }
 
     }
 
