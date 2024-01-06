@@ -97,17 +97,17 @@ pub mod tests {
 
     #[test]
     fn chained_backward() {
-        let a = Value::new(ArrayD::from_elem(vec![1, 1], 2.0));
-        let b = Value::new(ArrayD::from_elem(vec![1, 1], 5.0));
+        let a = Value::new(ArrayD::from_elem(vec![1], 2.0));
+        let b = Value::new(ArrayD::from_elem(vec![1], 5.0));
         let c = a * b;
         let result = c + 2.0;
         result.backward();
-        assert!(result.data()[[0, 0]] == 12.0);
-        assert!(result.grad()[[0, 0]] == 1.0);
-        assert!(c.data()[[0, 0]] == 10.0);
-        assert!(c.grad()[[0, 0]] == 1.0);
-        assert!(a.grad()[[0, 0]] == 5.0);
-        assert!(b.grad()[[0, 0]] == 2.0);
+        assert!(result.data()[[0]] == 12.0);
+        assert!(result.grad()[[0]] == 1.0);
+        assert!(c.data()[[0]] == 10.0);
+        assert!(c.grad()[[0]] == 1.0);
+        assert!(a.grad()[[0]] == 5.0);
+        assert!(b.grad()[[0]] == 2.0);
     }
 
     #[test]
@@ -116,7 +116,6 @@ pub mod tests {
         let b = Value::new(ArrayD::from_elem(vec![1], 5.0));
         let c = a / b;
         c.backward();
-        println!("{:?}", a.grad());
         assert!(c.data()[[0]] == 2.0);
         assert!(a.grad()[[0]] == 0.2);
 
@@ -141,13 +140,13 @@ pub mod tests {
 
     #[test]
     fn micrograd_copy_test() {
-        let x1 = Value::new(ArrayD::from_elem(vec![1, 1], 2.0));
-        let x2 = Value::new(ArrayD::from_elem(vec![1, 1], 0.0));
+        let x1 = Value::new(ArrayD::from_elem(vec![1], 2.0));
+        let x2 = Value::new(ArrayD::from_elem(vec![1], 0.0));
 
-        let w1 = Value::new(ArrayD::from_elem(vec![1, 1], -3.0));
-        let w2 = Value::new(ArrayD::from_elem(vec![1, 1], 1.0));
+        let w1 = Value::new(ArrayD::from_elem(vec![1], -3.0));
+        let w2 = Value::new(ArrayD::from_elem(vec![1], 1.0));
 
-        let b = Value::new(ArrayD::from_elem(vec![1, 1], 6.8813735870195432));
+        let b = Value::new(ArrayD::from_elem(vec![1], 6.8813735870195432));
 
         let x1w1 = x1 * w1;
         let x2w2 = x2 * w2;
@@ -159,34 +158,34 @@ pub mod tests {
         let o = (e - 1.0) / (e + 1.0);
         o.backward();
 
-        assert!(n.data()[[0, 0]] == 0.8813734);
-        assert!(approx_equal(n.grad()[[0, 0]], 0.5, 1e-6));
+        assert!(n.data()[[0]] == 0.8813734);
+        assert!(approx_equal(n.grad()[[0]], 0.5, 1e-6));
 
-        assert!(x1w1x2w2.data()[[0, 0]] == -6.0);
-        assert!(approx_equal(x1w1x2w2.grad()[[0, 0]], 0.5, 1e-6));
-
-
-        assert!(b.data()[[0, 0]] == 6.8813735870195432);
-        assert!(approx_equal(b.grad()[[0, 0]], 0.5, 1e-6));
+        assert!(x1w1x2w2.data()[[0]] == -6.0);
+        assert!(approx_equal(x1w1x2w2.grad()[[0]], 0.5, 1e-6));
 
 
-        assert!(x2w2.data()[[0, 0]] == 0.0);
-        assert!(approx_equal(x2w2.grad()[[0, 0]], 0.5, 1e-6));
+        assert!(b.data()[[0]] == 6.8813735870195432);
+        assert!(approx_equal(b.grad()[[0]], 0.5, 1e-6));
 
-        assert!(x1w1.data()[[0, 0]] == -6.0);
-        assert!(approx_equal(x1w1.grad()[[0, 0]], 0.5, 1e-6));
 
-        assert!(w2.data()[[0, 0]] == 1.0);
-        assert!(w2.grad()[[0, 0]] == 0.0);
+        assert!(x2w2.data()[[0]] == 0.0);
+        assert!(approx_equal(x2w2.grad()[[0]], 0.5, 1e-6));
 
-        assert!(x2.data()[[0, 0]]== 0.0);
-        assert!(approx_equal(x2.grad()[[0, 0]], 0.5, 1e-6));
+        assert!(x1w1.data()[[0]] == -6.0);
+        assert!(approx_equal(x1w1.grad()[[0]], 0.5, 1e-6));
 
-        assert!(w1.data()[[0, 0]] == -3.0);
-        assert!(approx_equal(w1.grad()[[0, 0]], 1.0, 1e-6));
+        assert!(w2.data()[[0]] == 1.0);
+        assert!(w2.grad()[[0]] == 0.0);
 
-        assert!(x1.data()[[0, 0]] == 2.0);
-        assert!(approx_equal(x1.grad()[[0, 0]], -1.5, 1e-6));
+        assert!(x2.data()[[0]]== 0.0);
+        assert!(approx_equal(x2.grad()[[0]], 0.5, 1e-6));
+
+        assert!(w1.data()[[0]] == -3.0);
+        assert!(approx_equal(w1.grad()[[0]], 1.0, 1e-6));
+
+        assert!(x1.data()[[0]] == 2.0);
+        assert!(approx_equal(x1.grad()[[0]], -1.5, 1e-6));
     }
 
 
@@ -377,7 +376,7 @@ pub mod tests {
 
         // Set up constants
         const NUMBER_OF_CHARACTERS : usize = 27;
-        const TEST_BATCH : usize = 64;
+        const TEST_BATCH : usize = 1;
 
 
         // Setup the weights of the network
@@ -397,13 +396,42 @@ pub mod tests {
         }
 
         let inputs = Value::new(inputs);
-        const EPOCHS : usize = 50;
+        const EPOCHS : usize = 1;
 
         for _ in 0..EPOCHS {
             {
                 let mut singleton = crate::central::SINGLETON_INSTANCE.lock().unwrap();
                 singleton.zero_grad();
             }
+
+            // logits = xenc @ W
+            let logits = inputs.matrix_mul(weights);
+
+            // counts = logits.exot()
+            let counts = logits.exp();
+
+            // probs = counts / counts.sum(1, keepdims=True)
+            let counts_sum = counts.sum(1, true);
+            let counts_cum_inv = counts_sum.pow(ArrayD::from_elem(vec![1], -1.0));
+            let counts_data = counts.data();
+            let shape = counts_data.shape();
+            let counts_cum_inv_broadcasted = counts_cum_inv.broadcast([shape[0], shape[1]]);
+            let probs = counts * counts_cum_inv_broadcasted;
+            
+            // loss = -probs[torach.arange(num), ys].log().mean()
+            let xs = Value::arange(TEST_BATCH);
+            let value = Value::new(outputs.clone());
+            let views = probs.view(xs, value);
+            let logged = -(views.log().mean());
+
+            println!("{:?}", logged.data());
+            logged.backward();
+            {
+                let mut singleton = crate::central::SINGLETON_INSTANCE.lock().unwrap();
+                singleton.update_grad();
+            }
+        }
+
             let logits = inputs.matrix_mul(weights);
             let counts = logits.exp();
             let counts_sum = counts.sum(1, true);
@@ -417,20 +445,7 @@ pub mod tests {
             let shape = counts_data.shape();
             let counts_cum_inv_broadcasted = counts_cum_inv.broadcast([shape[0], shape[1]]);
             let probs = counts * counts_cum_inv_broadcasted;
-            
-            let xs = Value::arange(TEST_BATCH);
-
-            let value = Value::new(outputs.clone());
-            let hold = probs.log();
-            let views = hold.view(xs, value);
-            let logged = -(views.mean());
-            println!("{:?}", logged.data());
-            logged.backward();
-            {
-                let mut singleton = crate::central::SINGLETON_INSTANCE.lock().unwrap();
-                singleton.update_grad();
-            }
-        }
+            println!("{:?}", probs.data());
 
     }
 

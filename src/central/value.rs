@@ -1,5 +1,6 @@
 use std:: ops::{Add, Mul, Div, Neg, Sub};
 
+use nalgebra::coordinates::X;
 use ndarray::prelude::*;
  
 use crate::central::*;
@@ -192,7 +193,9 @@ impl Value {
     /// so this works by taking it two 1d arrays, and then when .data() is called on it
     /// running through the pairs of values, and copying them into a new array, not perfect
     pub fn view(&self, xs: Value, ys: Value) -> Value {
-        return Value::new_from_op(ArrayD::from_elem(vec![1], 0.0), Operation::View(self.value, xs.value, ys.value));
+        let xs_data = xs.data();
+        let ys_data = ys.data();
+        return Value::new_from_op(ArrayD::from_elem(vec![xs_data.shape()[0]], 0.0), Operation::View(self.value, xs.value, ys.value));
     }
 
 

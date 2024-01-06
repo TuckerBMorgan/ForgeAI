@@ -105,6 +105,7 @@ impl Equation {
             Operation::Add(left_hand_side, right_hand_side) => {
                 let left_hand_grad = self.get_actual_grad(left_hand_side);
                 let right_hand_grad = self.get_actual_grad(right_hand_side);
+                
                 self.values.get_mut(&left_hand_side).unwrap().set_grad(left_hand_grad + out_grad.clone());
                 self.values.get_mut(&right_hand_side).unwrap().set_grad(right_hand_grad + out_grad);
             }
@@ -282,7 +283,7 @@ impl Equation {
         let value = self.values.get(&value_key).unwrap();
         match value.operation {
             Operation::View(a, b, c) => {
-                return value.get_grad();
+
                 let source_data = self.values.get(&a).unwrap().get_grad();
                 let x_inputs = self.values.get(&b).unwrap().get_grad();
                 let y_inputs = self.values.get(&c).unwrap().get_grad();
