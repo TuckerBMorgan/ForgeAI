@@ -116,6 +116,7 @@ pub mod tests {
         let b = Value::new(ArrayD::from_elem(vec![1], 5.0));
         let c = a / b;
         c.backward();
+        println!("{:?}", a.grad());
         assert!(c.data()[[0]] == 2.0);
         assert!(a.grad()[[0]] == 0.2);
 
@@ -134,6 +135,7 @@ pub mod tests {
         let d = Value::new(ArrayD::ones(vec![10]));
         let e = view + d;
         e.backward();
+        println!("{:?}", a.grad());
         assert!(approx_equal(a.grad()[[0, 0]], 1.0, 0.001));
     }
 
@@ -329,14 +331,15 @@ pub mod tests {
         result
     }
 
-    #[test]
-    fn bigram_test() {
+    fn genereate_dataset() -> (HashMap<char, usize>, HashMap<usize, char>, Vec<usize>, Vec<usize>) {
         let names = read_lines("./data/bigram/names.txt");
+
         let chars: HashSet<char> = names.iter()
         .flat_map(|word| word.chars())
-        .collect();
-        
+        .collect();    
         let mut chars_vec: Vec<char> = chars.into_iter().collect();
+
+
         chars_vec.sort_unstable();
 
         let mut stoi: HashMap<char, usize> = HashMap::new();
@@ -345,64 +348,84 @@ pub mod tests {
         }
         stoi.insert('.', 0);
 
-        let _itos: HashMap<usize, char> = stoi.iter()
+
+        let itos: HashMap<usize, char> = stoi.iter()
             .map(|(&c, &i)| (i, c))
             .collect();
 
-        let mut inputs: Vec<usize> = vec![];
-        let test_batch = 32;
-        let mut outputs = ArrayD::zeros(vec![test_batch, 27]);
+            let mut xs: Vec<usize> = vec![];
+            let mut ys = vec![];
 
-
-        // I BUILT MY DATASET WRONG
-        // Less tired, and with more time on your hand, this will be easy to solve
-        for name in names.iter().take(test_batch) {
-            let fixed = String::from(".") + &name + ".";
-            let chars: Vec<char> = fixed.chars().collect();
-            for i in 0..chars.len() - 1 {
-                let pair = (chars[i], chars[i + 1]);
-                inputs.push(stoi[&pair.0]);
-                outputs[[i, stoi[&pair.1]]] = 1.0;
+            // I BUILT MY DATASET WRONG
+            // Less tired, and with more time on your hand, this will be easy to solve
+            for name in names.iter() {
+                let fixed = String::from(".") + &name + ".";
+                let chars: Vec<char> = fixed.chars().collect();
+                for i in 0..chars.len() - 1 {
+                    let pair = (chars[i], chars[i + 1]);
+                    xs.push(stoi[&pair.0]);
+                    ys.push(stoi[&pair.1]);
+                }
             }
-        }
 
-        let mut start_as = ArrayD::from_elem(vec![test_batch, 27], 0.0f32);
+            let var_name: (HashMap<char, usize>, HashMap<usize, char>, Vec<usize>, Vec<usize>) = (stoi, itos, xs, ys);
+            return var_name;
+    }
 
-        for (input, output) in inputs.iter().enumerate() {
-            if input == test_batch {
-                break;
-            }
-            start_as[[input, *output]] = 1.0;
-        }
+    #[test]
+    fn bigram_test() {
 
+        // Set up constants
+        const NUMBER_OF_CHARACTERS : usize = 27;
+        const TEST_BATCH : usize = 64;
+
+
+        // Setup the weights of the network
         let mut rng = rand::thread_rng();
         let weights = Value::new(ArrayD::from_shape_fn(vec![27, 27], |_x|{rng.gen_range(-1.0..1.0)}));
+
         weights.set_requires_grad(true);
-        let one_out_as_value = Value::new(start_as.clone());
-        println!("{:?}", outputs.shape());
-        println!("{:?}", outputs);
-        panic!("ljsljks");
-        for _ in 0..50 {
+        // Generate out our dataset
+        let (stoi, itos, xs, ys) = genereate_dataset();
+        // Prepare a batch of data
+        let combined = xs.iter().take(TEST_BATCH).zip(ys.iter().take(TEST_BATCH));
+        let mut inputs = ArrayD::zeros(vec![TEST_BATCH, NUMBER_OF_CHARACTERS]);
+        let mut outputs = ArrayD::zeros(vec![TEST_BATCH]);
+        for (index, (input, output)) in combined.enumerate() {
+            inputs[[index, *input]] = 1.0f32;
+            outputs[[index]] = *output as f32;
+        }
+
+        let inputs = Value::new(inputs);
+        const EPOCHS : usize = 50;
+
+        for _ in 0..EPOCHS {
             {
                 let mut singleton = crate::central::SINGLETON_INSTANCE.lock().unwrap();
                 singleton.zero_grad();
             }
-            let logits = one_out_as_value.matrix_mul(weights);
+            let logits = inputs.matrix_mul(weights);
             let counts = logits.exp();
+            let counts_sum = counts.sum(1, true);
+            /*
+            Check broadcasting
 
-            //TODO HMM, pytorch has this 1
-            // I have this as 0... that is wrong
-            let counts_sum = counts.sum(0);
-    
-            let probs = counts / counts_sum;
-
-            let xs = Value::arange(test_batch);
+            doube check work from last night
+ */
+            let counts_cum_inv = counts_sum.pow(ArrayD::from_elem(vec![1], -1.0));
+            let counts_data = counts.data();
+            let shape = counts_data.shape();
+            let counts_cum_inv_broadcasted = counts_cum_inv.broadcast([shape[0], shape[1]]);
+            let probs = counts * counts_cum_inv_broadcasted;
+            
+            let xs = Value::arange(TEST_BATCH);
 
             let value = Value::new(outputs.clone());
-            let views = probs.view(xs, value);
-            let logged = -(views.log().mean());
+            let hold = probs.log();
+            let views = hold.view(xs, value);
+            let logged = -(views.mean());
             println!("{:?}", logged.data());
-            logged.backward();    
+            logged.backward();
             {
                 let mut singleton = crate::central::SINGLETON_INSTANCE.lock().unwrap();
                 singleton.update_grad();

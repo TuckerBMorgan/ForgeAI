@@ -25,7 +25,8 @@ pub enum Operation {
     /// (Base Array that the view maps to, The rows to select, the indices inside those arrays to select)
     View(ValueKey, ValueKey, ValueKey), 
     /// (The array where the mean value is found)
-    Mean(ValueKey)
+    Mean(ValueKey),
+    Broadcasting(ValueKey, [usize;2])
 }
 
 unsafe impl Send for Operation {}
@@ -63,7 +64,7 @@ impl Equation {
     /// Needs to be called after backwards is called, elsewise the grad will be 0
     pub fn update_grad(&mut self) {
         for (_, value) in self.values.iter_mut() {
-            value.update_data(-0.05);
+            value.update_data(-0.01);
         }
     }
 
@@ -83,13 +84,13 @@ impl Equation {
     /// # Arguments
     /// 'value_key' - THe Key used to look up the array
     pub fn get_value(&self, value_key: ValueKey) -> ArrayD<f32> {
-        return self.values[&value_key].data.clone();
+        self.get_actual_data(value_key)
     }
     /// Gets the Grad that is associated with the Value
     /// # Arguments
     /// 'value_key' - THe Key used to look up the Value
     pub fn get_grad(&self, value_key: ValueKey) -> ArrayD<f32> {
-        return self.values[&value_key].grad.clone();
+        return self.values[&value_key].get_grad().clone();
     }
 
     /// Preforms a backpropgation value for a single Value in the graph
@@ -97,70 +98,107 @@ impl Equation {
     /// 'value_key' - The Key for the value that is being back propogated
     fn backward_for_value(&mut self, value_key: ValueKey) {
         let op = self.values.get(&value_key).unwrap().operation;
-        let out_data = self.values.get(&value_key).unwrap().data.clone();
-        let out_grad = self.values.get(&value_key).unwrap().grad.clone();
+        let out_data = self.get_actual_data(value_key);
+        let out_grad = self.get_actual_grad(value_key);
         match op {
             Operation::Nop => {}
-            Operation::Add(left_hand_side, right_hand_size) => {
-                self.values.get_mut(&left_hand_side).unwrap().grad = &self.values.get_mut(&left_hand_side).unwrap().grad + out_grad.clone();
-                self.values.get_mut(&right_hand_size).unwrap().grad = &self.values.get_mut(&right_hand_size).unwrap().grad + out_grad;
+            Operation::Add(left_hand_side, right_hand_side) => {
+                let left_hand_grad = self.get_actual_grad(left_hand_side);
+                let right_hand_grad = self.get_actual_grad(right_hand_side);
+                self.values.get_mut(&left_hand_side).unwrap().set_grad(left_hand_grad + out_grad.clone());
+                self.values.get_mut(&right_hand_side).unwrap().set_grad(right_hand_grad + out_grad);
             }
             Operation::Multiplication(left_hand_side, right_hand_side) => {
-                let left_hand_data = self.values.get(&left_hand_side).unwrap().data.clone();
-                let right_hand_data = self.values.get(&right_hand_side).unwrap().data.clone();
-                self.values.get_mut(&left_hand_side).unwrap().grad = &self.values.get_mut(&left_hand_side).unwrap().grad + right_hand_data * out_grad.clone();
-                self.values.get_mut(&right_hand_side).unwrap().grad = &self.values.get_mut(&right_hand_side).unwrap().grad  + left_hand_data * out_grad;
+                let left_hand_grad = self.get_actual_grad(left_hand_side);
+                let right_hand_grad = self.get_actual_grad(right_hand_side);
+
+                let left_hand_data = self.get_actual_data(left_hand_side);
+                let right_hand_data = self.get_actual_data(right_hand_side);
+
+                let new_left_side_grad = left_hand_grad + right_hand_data * out_grad.clone();
+                let new_right_side_grad = right_hand_grad  + left_hand_data * out_grad;
+
+                self.values.get_mut(&left_hand_side).unwrap().set_grad(new_left_side_grad);
+                self.values.get_mut(&right_hand_side).unwrap().set_grad(new_right_side_grad);
             }
             Operation::Exp(base_value) => {
-                self.values.get_mut(&base_value).unwrap().grad = &self.values.get_mut(&base_value).unwrap().grad +  out_grad * out_data;
+                let grad = self.get_actual_grad(base_value);
+                self.values.get_mut(&base_value).unwrap().set_grad(grad +  out_grad * out_data);
             }
             Operation::Pow(base, power) => {
-                let other_data = &self.values.get(&power).unwrap().data;
-                let base_data = &self.values.get(&base).unwrap().data;
+                
+                let other_data = self.get_actual_data(power);
+                let base_data = self.get_actual_data(base);
+ 
                 let power = other_data[[0]] - 1.0;
                 let grad_update = other_data * base_data.map(|x| x.powf(power)) * out_grad;
-                self.values.get_mut(&base).unwrap().grad = &self.values.get_mut(&base).unwrap().grad + grad_update;
+
+                let grad = self.get_actual_grad(base);
+
+                self.values.get_mut(&base).unwrap().set_grad(grad + grad_update);
             }
             Operation::MatrixMultiplication(left_hand, right_hand) => {
                 let out_data = out_data.into_dimensionality::<Ix2>().unwrap();
-                let other = self.values.get(&right_hand).unwrap().data.t().into_dimensionality::<Ix2>().unwrap();
+                let right_hand_data =  self.get_actual_data(right_hand);
+                let right_hand_data_tranpose  =right_hand_data.t();
+                let other = right_hand_data_tranpose.into_dimensionality::<Ix2>().unwrap();
+                let left_hand_data = self.get_actual_grad(left_hand);
+                self.values.get_mut(&left_hand).unwrap().set_grad(left_hand_data + out_data.clone().dot(&other).into_dyn());
 
-                self.values.get_mut(&left_hand).unwrap().grad = &self.values.get(&left_hand).unwrap().grad + out_data.clone().dot(&other).into_dyn();
-
-                let other = self.values.get(&left_hand).unwrap().data.t().into_dimensionality::<Ix2>().unwrap();
-                let temp = &self.values.get(&right_hand).unwrap().grad + other.dot(&out_data).into_dyn();
-
-                self.values.get_mut(&right_hand).unwrap().grad = temp;
-
+                let left_hand_data = self.get_actual_data(left_hand);
+                let right_hand_grad = self.get_actual_grad(right_hand);
+                let other = left_hand_data.t().into_dimensionality::<Ix2>().unwrap();
+                let temp = right_hand_grad + other.dot(&out_data).into_dyn();
+                self.values.get_mut(&right_hand).unwrap().set_grad(temp);
             }
             Operation::Log10(base) => {
-                let grad = self.values.get(&base).unwrap().data.map(|x| 1.0 / x);
-                self.values.get_mut(&base).unwrap().grad = &self.values.get_mut(&base).unwrap().grad + (grad * out_grad);
+                let data = self.get_actual_data(base);
+                // We need to add EPISILON, so that way we will never divide by 0
+                let grad = data.map(|x| 1.0 / (x +std::f32::EPSILON));
+                let existing_grad = self.get_actual_grad(base);
+                self.values.get_mut(&base).unwrap().set_grad(existing_grad + (grad * out_grad));
             }
             Operation::Sum(origin, _index) => {
-                let shape: &[usize] = self.values.get(&origin).unwrap().grad.shape();
-                self.values.get_mut(&origin).unwrap().grad = &self.values.get(&origin).unwrap().grad + &out_grad.broadcast(shape).unwrap();
+                let origin_grad = self.get_actual_grad(origin);
+                let shape: &[usize] = origin_grad.shape();
+                self.values.get_mut(&origin).unwrap().set_grad(&origin_grad + &out_grad.broadcast(shape).unwrap());
             }
             Operation::Mean(origin) => {
-                let value = &self.values.get(&origin).unwrap().data;
+                let value =self.get_actual_data(origin);
+                let grad = self.get_actual_grad(origin);
                 // this should be getting back the batch size. As we want to evenlly distribute the loss over all the values that we have 
                 // takent he mean off
                 let amount = -1.0 / (value.len() as f32);
-                self.values.get_mut(&origin).unwrap().grad = &self.values.get(&origin).unwrap().grad + (ArrayD::<f32>::ones(value.shape()) * amount);
+                self.values.get_mut(&origin).unwrap().set_grad(&grad + (ArrayD::<f32>::ones(grad.shape()) * amount));
             }
             Operation::View(value, x_indices, y_indices) => {
                 let total_iterator : Vec<((f32, f32), f32)>  = {
-                    let xs = self.values.get(&x_indices).unwrap();
-                    let ys = self.values.get(&y_indices).unwrap();
-                    let zipped_iter = xs.data.iter().zip(ys.data.iter()).map(|(x, y)|(*x, *y)).zip(out_grad.iter().map(|d|*d));
+                    let xs = self.get_actual_data(x_indices);
+                    let ys = self.get_actual_data(y_indices);
+                    let zipped_iter = xs.iter().zip(ys.iter()).map(|(x, y)|(*x, *y)).zip(out_grad.iter().map(|d|*d));
 
                     zipped_iter.collect()
                 };
 
-                let origin = self.values.get_mut(&value).unwrap();
+                let mut origin = self.values.get_mut(&value).unwrap().get_grad();
 
                 for ((index_x, index_y), data) in total_iterator {
-                    origin.grad[[index_x as usize, index_y as usize]] = data;
+                    origin[[index_x as usize, index_y as usize]] = data;
+                }
+                self.values.get_mut(&value).unwrap().set_grad(origin);
+            },
+            Operation::Broadcasting(value, shape) => {
+                // Broadcasting needs to sum up along the axis that it was broascasted over
+                let old_shape = self.get_actual_data(value);
+                if old_shape.shape()[0] != shape[0] {
+                    let new = out_grad.sum_axis(Axis(0));
+                    let existing_grad = self.get_actual_grad(value);
+                    self.values.get_mut(&value).unwrap().set_grad(existing_grad + new);
+                }
+                else if old_shape.shape()[1] != shape[1] {
+                    let new = out_grad.sum_axis(Axis(1)).into_shape(vec![old_shape.shape()[0], 1]).unwrap();
+                    let existing_grad = self.get_actual_grad(value);
+                    self.values.get_mut(&value).unwrap().set_grad(existing_grad + new);
                 }
             }
         }
@@ -203,7 +241,8 @@ impl Equation {
         self.topological_sort_util(starting_value, &mut visited, &mut stack);
 
         // Initialize gradients
-        self.values.get_mut(&starting_value).unwrap().grad.fill(1.0);
+        let ones = ArrayD::ones(self.values.get(&starting_value).unwrap().get_grad().shape());
+        self.values.get_mut(&starting_value).unwrap().set_grad(ones);
 
         // Process nodes in topologically sorted order
         while let Some(node) = stack.pop() {
@@ -213,5 +252,53 @@ impl Equation {
 
     pub fn set_requires_grad(&mut self, value: ValueKey, requires_grad: bool) {
         self.values.get_mut(&value).unwrap().requires_grad = requires_grad;
+    }
+
+    fn get_actual_data(&self, value_key: ValueKey) -> ArrayD<f32> {
+        let value = self.values.get(&value_key).unwrap();
+        match value.operation {
+            Operation::View(a, b, c) => {
+                let source_data = self.values.get(&a).unwrap().get_data();
+                let x_inputs = self.values.get(&b).unwrap().get_data();
+                let y_inputs = self.values.get(&c).unwrap().get_data();
+
+                let zipped_iter = x_inputs.iter().zip(y_inputs.iter());
+
+                let mut data_vec = vec![];
+                for (x, y) in zipped_iter {
+                    data_vec.push(source_data[[*x as usize, *y as usize]]);
+                }
+                let zeores = ArrayD::from_shape_vec(vec![x_inputs.shape()[0]], data_vec).unwrap();              
+                return zeores;
+            },
+            _ => {
+                return value.get_data();
+            }
+        }
+    }
+
+
+    fn get_actual_grad(&self, value_key: ValueKey) -> ArrayD<f32> {
+        let value = self.values.get(&value_key).unwrap();
+        match value.operation {
+            Operation::View(a, b, c) => {
+                return value.get_grad();
+                let source_data = self.values.get(&a).unwrap().get_grad();
+                let x_inputs = self.values.get(&b).unwrap().get_grad();
+                let y_inputs = self.values.get(&c).unwrap().get_grad();
+
+                let zipped_iter = x_inputs.iter().zip(y_inputs.iter());
+
+                let mut data_vec = vec![];
+                for (x, y) in zipped_iter {
+                    data_vec.push(source_data[[*x as usize, *y as usize]]);
+                }
+                let zeores = ArrayD::from_shape_vec(vec![x_inputs.shape()[0]], data_vec).unwrap();              
+                return zeores;
+            },
+            _ => {
+                return value.get_grad();
+            }
+        }
     }
 }

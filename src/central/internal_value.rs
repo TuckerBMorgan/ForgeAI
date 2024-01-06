@@ -1,13 +1,14 @@
+
 use crate::central::*;
 use ndarray::ArrayD;
 
 /// The struct that represents a Node in our graph
 pub struct InternalValue {
     /// What data is in this node
-    pub data: ArrayD<f32>,
+    data: ArrayD<f32>,
     /// What the gradiante for this node is, starts at zero
     /// is always the same shape as data
-    pub grad: ArrayD<f32>,
+    grad: ArrayD<f32>,
     /// What operation created this value, will be NOP for basic creation
     pub operation: Operation,
 
@@ -22,6 +23,28 @@ impl InternalValue {
             operation,
             requires_grad: false
         }
+    }
+
+    pub fn set_data(&mut self, data: ArrayD<f32>) {
+        if self.data.shape() != data.shape() {
+            panic!("Tried setting wrong sized data aarrays, must be equal right {:?} wrong {:?}", self.data.shape(), data.shape());
+        }
+        self.data = data;
+    }
+
+    pub fn get_data(&self) -> ArrayD<f32> {
+        self.data.clone()
+    }
+
+    pub fn set_grad(&mut self, grad: ArrayD<f32>) {
+        if self.grad.shape() != grad.shape() {
+            panic!("Tried setting wrong grad sized arrays, must be equal right {:?} wrong {:?}", self.grad.shape(), grad.shape());
+        }
+        self.grad = grad;
+    }
+
+    pub fn get_grad(&self) -> ArrayD<f32> {
+        self.grad.clone()
     }
 
     #[allow(dead_code)]
@@ -68,6 +91,9 @@ impl InternalValue {
                 return  vec![a];
             },
             Operation::Mean(a) => {
+                return vec![a];
+            },
+            Operation::Broadcasting(a, _b) => {
                 return vec![a];
             }
         }

@@ -199,10 +199,12 @@ impl Value {
     /// Sums up a value along the provided axis
     /// this will always remove the dimension, unlike the same function in
     /// torch which provides the options not to
-    pub fn sum(&self, index: usize) -> Value {
-        // TODO: provide the ability to say that you want to keep the dimension that is removed when this sum happens
-        // The inverse of this is a broadcast operatsion
-        let result = self.data().sum_axis(Axis(index));
+    pub fn sum(&self, index: usize, keep_dimension: bool) -> Value {
+        let mut result = self.data().sum_axis(Axis(index));
+        if keep_dimension {
+            let dim = result.shape()[0];
+            result = result.into_shape(vec![dim, 1]).unwrap();
+        }
         return Value::new_from_op(result, Operation::Sum(self.value, index));
     }
 
@@ -216,11 +218,19 @@ impl Value {
         let mut singleton = crate::central::SINGLETON_INSTANCE.lock().unwrap();
         singleton.set_requires_grad(self.value, required_grad);
     }
+
+    pub fn broadcast(&self, new_shape: [usize; 2]) -> Value {
+        let new = self.data().broadcast(new_shape).unwrap().into_dyn().to_owned();
+        return Value::new_from_op(new, Operation::Broadcasting(self.value, new_shape));
+    }
 }
 
 impl Add for Value {
     type Output = Self;
     fn add(self, rhs: Self) -> Self::Output {
+        if self.data().shape() != rhs.data().shape() {
+            panic!("Arrays must be of the same size to add");
+        }
         return Value::new_from_op(self.data() + rhs.data(), Operation::Add(self.value, rhs.value));
     }
 }
@@ -229,6 +239,9 @@ impl Mul for Value {
     type Output = Self;
 
     fn mul(self, rhs: Self) -> Self::Output {
+        if self.data().shape() != rhs.data().shape() {
+            panic!("Arrays must be of the same size to multiply");
+        }
         return Value::new_from_op(self.data() * rhs.data(), Operation::Multiplication(self.value, rhs.value));
     }
 }
@@ -272,8 +285,10 @@ impl Mul<Value> for f32 {
 impl Div for Value {
     type Output = Self;
     fn div(self, rhs: Value) -> Self::Output {
+        if self.data().shape() != rhs.data().shape() {
+            panic!("Arrays must be of the same size to div");
+        }
         let intermediate = rhs.pow(ArrayD::from_elem(vec![1], -1.0));
-
         return Value::new_from_op(self.data().mul(&intermediate.data()), Operation::Multiplication(self.value, intermediate.value));
     }
 }
