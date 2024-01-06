@@ -105,7 +105,7 @@ impl Equation {
             Operation::Add(left_hand_side, right_hand_side) => {
                 let left_hand_grad = self.get_actual_grad(left_hand_side);
                 let right_hand_grad = self.get_actual_grad(right_hand_side);
-                
+
                 self.values.get_mut(&left_hand_side).unwrap().set_grad(left_hand_grad + out_grad.clone());
                 self.values.get_mut(&right_hand_side).unwrap().set_grad(right_hand_grad + out_grad);
             }
@@ -139,15 +139,17 @@ impl Equation {
                 self.values.get_mut(&base).unwrap().set_grad(grad + grad_update);
             }
             Operation::MatrixMultiplication(left_hand, right_hand) => {
-                let out_data = out_data.into_dimensionality::<Ix2>().unwrap();
+                let out_data = out_grad.into_dimensionality::<Ix2>().unwrap();
                 let right_hand_data =  self.get_actual_data(right_hand);
-                let right_hand_data_tranpose  =right_hand_data.t();
+                let right_hand_data_tranpose  = right_hand_data.t();
+
                 let other = right_hand_data_tranpose.into_dimensionality::<Ix2>().unwrap();
                 let left_hand_data = self.get_actual_grad(left_hand);
                 self.values.get_mut(&left_hand).unwrap().set_grad(left_hand_data + out_data.clone().dot(&other).into_dyn());
 
                 let left_hand_data = self.get_actual_data(left_hand);
                 let right_hand_grad = self.get_actual_grad(right_hand);
+                
                 let other = left_hand_data.t().into_dimensionality::<Ix2>().unwrap();
                 let temp = right_hand_grad + other.dot(&out_data).into_dyn();
                 self.values.get_mut(&right_hand).unwrap().set_grad(temp);
@@ -170,6 +172,7 @@ impl Equation {
                 // this should be getting back the batch size. As we want to evenlly distribute the loss over all the values that we have 
                 // takent he mean off
                 let amount = -1.0 / (value.len() as f32);
+                println!("{:?}", amount);
                 self.values.get_mut(&origin).unwrap().set_grad(&grad + (ArrayD::<f32>::ones(grad.shape()) * amount));
             }
             Operation::View(value, x_indices, y_indices) => {
@@ -184,6 +187,7 @@ impl Equation {
                 let mut origin = self.values.get_mut(&value).unwrap().get_grad();
 
                 for ((index_x, index_y), data) in total_iterator {
+                    //println!("{:?} {:?} {:?}", index_x, index_y, data);
                     origin[[index_x as usize, index_y as usize]] = data;
                 }
                 self.values.get_mut(&value).unwrap().set_grad(origin);
@@ -283,7 +287,7 @@ impl Equation {
         let value = self.values.get(&value_key).unwrap();
         match value.operation {
             Operation::View(a, b, c) => {
-
+                return value.get_grad();
                 let source_data = self.values.get(&a).unwrap().get_grad();
                 let x_inputs = self.values.get(&b).unwrap().get_grad();
                 let y_inputs = self.values.get(&c).unwrap().get_grad();

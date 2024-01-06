@@ -134,7 +134,6 @@ pub mod tests {
         let d = Value::new(ArrayD::ones(vec![10]));
         let e = view + d;
         e.backward();
-        println!("{:?}", a.grad());
         assert!(approx_equal(a.grad()[[0, 0]], 1.0, 0.001));
     }
 
@@ -376,7 +375,7 @@ pub mod tests {
 
         // Set up constants
         const NUMBER_OF_CHARACTERS : usize = 27;
-        const TEST_BATCH : usize = 1;
+        const TEST_BATCH : usize = 32;
 
 
         // Setup the weights of the network
@@ -394,9 +393,8 @@ pub mod tests {
             inputs[[index, *input]] = 1.0f32;
             outputs[[index]] = *output as f32;
         }
-
         let inputs = Value::new(inputs);
-        const EPOCHS : usize = 1;
+        const EPOCHS : usize = 100;
 
         for _ in 0..EPOCHS {
             {
@@ -430,22 +428,27 @@ pub mod tests {
                 let mut singleton = crate::central::SINGLETON_INSTANCE.lock().unwrap();
                 singleton.update_grad();
             }
-        }
-
-            let logits = inputs.matrix_mul(weights);
-            let counts = logits.exp();
-            let counts_sum = counts.sum(1, true);
             /*
-            Check broadcasting
-
-            doube check work from last night
- */
-            let counts_cum_inv = counts_sum.pow(ArrayD::from_elem(vec![1], -1.0));
-            let counts_data = counts.data();
-            let shape = counts_data.shape();
-            let counts_cum_inv_broadcasted = counts_cum_inv.broadcast([shape[0], shape[1]]);
-            let probs = counts * counts_cum_inv_broadcasted;
-            println!("{:?}", probs.data());
+            println!("------");
+            println!("{:?}", probs.grad());
+            println!("");
+            println!("{:?}", counts.grad());
+            println!("");
+            println!("{:?}", counts_cum_inv_broadcasted.grad());
+            println!("");
+            println!("{:?}", counts_cum_inv.grad());
+            println!("");
+            println!("{:?}", counts_sum.grad());
+            println!("");
+            println!("{:?}", counts.grad());
+            println!("");
+            println!("{:?}", logits.grad());
+            println!("");
+            println!("{:?}", weights.grad());
+            println!("");
+            println!("----aaa-");
+             */
+        }
 
     }
 
